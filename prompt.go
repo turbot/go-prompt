@@ -25,6 +25,7 @@ type Completer func(Document) []Suggest
 type Prompt struct {
 	in                ConsoleParser
 	buf               *Buffer
+	prevText          string
 	renderer          *Render
 	executor          Executor
 	history           *History
@@ -54,7 +55,7 @@ func (p *Prompt) Run() {
 		p.completion.Update(*p.buf.Document())
 	}
 
-	p.renderer.Render(p.buf, p.completion)
+	p.renderer.Render(p.buf, p.prevText, p.completion)
 
 	bufCh := make(chan []byte, 128)
 	stopReadBufCh := make(chan struct{})
@@ -85,7 +86,7 @@ func (p *Prompt) Run() {
 
 				p.completion.Update(*p.buf.Document())
 
-				p.renderer.Render(p.buf, p.completion)
+				p.renderer.Render(p.buf, p.prevText, p.completion)
 
 				if p.exitChecker != nil && p.exitChecker(e.input, true) {
 					p.skipTearDown = true
@@ -97,11 +98,11 @@ func (p *Prompt) Run() {
 				go p.handleSignals(exitCh, winSizeCh, stopHandleSignalCh)
 			} else {
 				p.completion.Update(*p.buf.Document())
-				p.renderer.Render(p.buf, p.completion)
+				p.renderer.Render(p.buf, p.prevText, p.completion)
 			}
 		case w := <-winSizeCh:
 			p.renderer.UpdateWinSize(w)
-			p.renderer.Render(p.buf, p.completion)
+			p.renderer.Render(p.buf, p.prevText, p.completion)
 		case code := <-exitCh:
 			p.renderer.BreakLine(p.buf)
 			p.tearDown()
@@ -114,6 +115,8 @@ func (p *Prompt) Run() {
 
 func (p *Prompt) feed(b []byte) (shouldExit bool, exec *Exec) {
 	key := GetKey(b)
+	p.prevText = p.buf.Text()
+
 	p.buf.lastKeyStroke = key
 	// completion
 	completing := p.completion.Completing()
@@ -134,13 +137,34 @@ func (p *Prompt) feed(b []byte) (shouldExit bool, exec *Exec) {
 		p.history.Clear()
 	case Up, ControlP:
 		if !completing { // Don't use p.completion.Completing() because it takes double operation when switch to selected=-1.
-			if newBuf, changed := p.history.Older(p.buf); changed {
+
+			// if this is a multiline buffer and the cursor is not at the top line,
+			// then we just move up the cursor
+			if p.buf.NewLineCount() > 0 && p.buf.Document().CursorPositionRow() > 0 {
+				// this is a multiline buffer
+				// move the cursor up by one line
+				p.buf.CursorUp(1)
+			} else if newBuf, changed := p.history.Older(p.buf); changed {
+				p.prevText = p.buf.Text()
 				p.buf = newBuf
 			}
+
+			return
 		}
 	case Down, ControlN:
 		if !completing { // Don't use p.completion.Completing() because it takes double operation when switch to selected=-1.
-			if newBuf, changed := p.history.Newer(p.buf); changed {
+
+			// if this is a multiline buffer and the cursor is not at the top line,
+			// then we just move up the cursor
+			// debug.Log(fmt.Sprintln("NewLineCount:", p.buf.NewLineCount()))
+			// debug.Log(fmt.Sprintln("CursorPositionRow:", p.buf.Document().CursorPositionRow()))
+
+			if p.buf.NewLineCount() > 0 && p.buf.Document().CursorPositionRow() < (p.buf.NewLineCount()) {
+				// this is a multiline buffer
+				// move the cursor up by one line
+				p.buf.CursorDown(1)
+			} else if newBuf, changed := p.history.Newer(p.buf); changed {
+				p.prevText = p.buf.Text()
 				p.buf = newBuf
 			}
 			return
@@ -240,7 +264,7 @@ func (p *Prompt) Input() string {
 		p.completion.Update(*p.buf.Document())
 	}
 
-	p.renderer.Render(p.buf, p.completion)
+	p.renderer.Render(p.buf, p.prevText, p.completion)
 	bufCh := make(chan []byte, 128)
 	stopReadBufCh := make(chan struct{})
 	go p.readBuffer(bufCh, stopReadBufCh)
@@ -258,7 +282,7 @@ func (p *Prompt) Input() string {
 				return e.input
 			} else {
 				p.completion.Update(*p.buf.Document())
-				p.renderer.Render(p.buf, p.completion)
+				p.renderer.Render(p.buf, p.prevText, p.completion)
 			}
 		default:
 			time.Sleep(10 * time.Millisecond)

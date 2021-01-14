@@ -2,6 +2,7 @@ package prompt
 
 import (
 	"runtime"
+	"strings"
 
 	"github.com/c-bata/go-prompt/internal/debug"
 	runewidth "github.com/mattn/go-runewidth"
@@ -167,21 +168,29 @@ func (r *Render) renderCompletion(buf *Buffer, completions *CompletionManager) {
 }
 
 // Render renders to the console.
-func (r *Render) Render(buffer *Buffer, completion *CompletionManager) {
+func (r *Render) Render(buffer *Buffer, previousText string, completion *CompletionManager) {
+	defer debug.Un(debug.Trace("Render"))
 	// In situations where a pseudo tty is allocated (e.g. within a docker container),
 	// window size via TIOCGWINSZ is not immediately available and will result in 0,0 dimensions.
 	if r.col == 0 {
 		return
 	}
 	defer func() { debug.AssertNoError(r.out.Flush()) }()
-	r.move(r.previousCursor, 0)
 
 	line := buffer.Text()
+	traceBackLines := strings.Count(previousText, "\n")
+	if len(line) == 0 {
+		// if the new buffer is empty, then we shouldn't traceback any
+		traceBackLines = 0
+	}
+
+	r.move((traceBackLines)*int(r.col)+r.previousCursor, 0)
+
 	prefix := r.getCurrentPrefix()
 	cursor := runewidth.StringWidth(prefix) + runewidth.StringWidth(line)
 
 	// prepare area
-	_, y := r.toPos(cursor)
+	_, y := r.toPos((traceBackLines + int(r.col)) + cursor)
 
 	h := y + 1 + int(completion.max)
 	if h > int(r.row) || completionMargin > int(r.col) {
@@ -191,15 +200,28 @@ func (r *Render) Render(buffer *Buffer, completion *CompletionManager) {
 
 	// Rendering
 	r.out.HideCursor()
-	defer r.out.ShowCursor()
+
+	r.out.EraseLine()
+	r.out.EraseDown()
 
 	r.renderPrefix()
-	r.out.SetColor(r.inputTextColor, r.inputBGColor, false)
-	r.out.WriteStr(line)
-	r.out.SetColor(DefaultColor, DefaultColor, false)
-	r.lineWrap(cursor)
 
-	r.out.EraseDown()
+	if buffer.NewLineCount() > 0 {
+		r.out.SetColor(r.inputTextColor, r.inputBGColor, false)
+		r.out.WriteStr(buffer.Document().TextBeforeCursor())
+
+		r.out.SetColor(Black, White, true)
+		r.out.WriteStr(" ")
+
+		r.out.SetColor(r.inputTextColor, r.inputBGColor, false)
+		r.out.WriteStr(buffer.Document().TextAfterCursor())
+	} else {
+		r.out.WriteStr(line)
+		defer r.out.ShowCursor()
+	}
+
+	r.lineWrap(cursor)
+	r.out.SetColor(DefaultColor, DefaultColor, false)
 
 	cursor = r.backward(cursor, runewidth.StringWidth(line)-buffer.DisplayCursorPosition())
 
@@ -225,7 +247,7 @@ func (r *Render) Render(buffer *Buffer, completion *CompletionManager) {
 // BreakLine to break line.
 func (r *Render) BreakLine(buffer *Buffer) {
 	// Erasing and Render
-	cursor := runewidth.StringWidth(buffer.Document().TextBeforeCursor()) + runewidth.StringWidth(r.getCurrentPrefix())
+	cursor := (buffer.NewLineCount() * int(r.col)) + runewidth.StringWidth(buffer.Document().TextBeforeCursor()) + runewidth.StringWidth(r.getCurrentPrefix())
 	r.clear(cursor)
 	r.renderPrefix()
 	r.out.SetColor(r.inputTextColor, r.inputBGColor, false)
