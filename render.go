@@ -1,6 +1,7 @@
 package prompt
 
 import (
+	"fmt"
 	"runtime"
 	"strings"
 
@@ -167,6 +168,12 @@ func (r *Render) renderCompletion(buf *Buffer, completions *CompletionManager) {
 	r.out.SetColor(DefaultColor, DefaultColor, false)
 }
 
+// ClearScreen :: Clears the screen and moves the cursor to home
+func (r *Render) ClearScreen() {
+	r.out.EraseScreen()
+	r.out.CursorGoTo(0, 0)
+}
+
 // Render renders to the console.
 func (r *Render) Render(buffer *Buffer, previousText string, completion *CompletionManager) {
 	defer debug.Un(debug.Trace("Render"))
@@ -183,6 +190,8 @@ func (r *Render) Render(buffer *Buffer, previousText string, completion *Complet
 		// if the new buffer is empty, then we shouldn't traceback any
 		traceBackLines = 0
 	}
+	debug.Log(fmt.Sprintln(line))
+	debug.Log(fmt.Sprintln(traceBackLines))
 
 	r.move((traceBackLines)*int(r.col)+r.previousCursor, 0)
 
@@ -203,7 +212,6 @@ func (r *Render) Render(buffer *Buffer, previousText string, completion *Complet
 
 	r.out.EraseLine()
 	r.out.EraseDown()
-
 	r.renderPrefix()
 
 	if buffer.NewLineCount() > 0 {

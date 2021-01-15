@@ -43,6 +43,11 @@ type Exec struct {
 	input string
 }
 
+// ClearScreen :: Clears the screen
+func (p *Prompt) ClearScreen() {
+	p.renderer.ClearScreen()
+}
+
 // Run starts prompt.
 func (p *Prompt) Run() {
 	p.skipTearDown = false
