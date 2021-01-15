@@ -207,14 +207,7 @@ func (r *Render) Render(buffer *Buffer, previousText string, completion *Complet
 	r.renderPrefix()
 
 	if buffer.NewLineCount() > 0 {
-		r.out.SetColor(r.inputTextColor, r.inputBGColor, false)
-		r.out.WriteStr(buffer.Document().TextBeforeCursor())
-
-		r.out.SetColor(Black, White, true)
-		r.out.WriteStr(" ")
-
-		r.out.SetColor(r.inputTextColor, r.inputBGColor, false)
-		r.out.WriteStr(buffer.Document().TextAfterCursor())
+		r.renderMultiline(buffer)
 	} else {
 		r.out.WriteStr(line)
 		defer r.out.ShowCursor()
@@ -242,6 +235,32 @@ func (r *Render) Render(buffer *Buffer, previousText string, completion *Complet
 		cursor = r.backward(cursor, runewidth.StringWidth(rest))
 	}
 	r.previousCursor = cursor
+}
+
+func (r *Render) renderMultiline(buffer *Buffer) {
+	before := buffer.Document().TextBeforeCursor()
+	cursor := ""
+	after := ""
+
+	if len(buffer.Document().TextAfterCursor()) == 0 {
+		cursor = " "
+		after = ""
+	} else {
+		cursor = string(buffer.Text()[buffer.Document().cursorPosition])
+		if cursor == "\n" {
+			cursor = " \n"
+		}
+		after = buffer.Document().TextAfterCursor()[1:]
+	}
+
+	r.out.SetColor(r.inputTextColor, r.inputBGColor, false)
+	r.out.WriteStr(before)
+
+	r.out.SetDisplayAttributes(r.inputTextColor, r.inputBGColor, DisplayReverse)
+	r.out.WriteStr(cursor)
+
+	r.out.SetColor(r.inputTextColor, r.inputBGColor, false)
+	r.out.WriteStr(after)
 }
 
 // BreakLine to break line.
