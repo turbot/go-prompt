@@ -184,14 +184,14 @@ func (r *Render) Render(buffer *Buffer, previousText string, completion *Complet
 	}
 	defer func() { debug.AssertNoError(r.out.Flush()) }()
 
-	line := buffer.Text()
+	line := strings.TrimSpace(buffer.Text())
+	debug.Log(fmt.Sprintln("Line:", line))
 	traceBackLines := strings.Count(previousText, "\n")
 	if len(line) == 0 {
 		// if the new buffer is empty, then we shouldn't traceback any
 		traceBackLines = 0
 	}
-	debug.Log(fmt.Sprintln(line))
-	debug.Log(fmt.Sprintln(traceBackLines))
+	debug.Log(fmt.Sprintln("TraceBackLines:", traceBackLines))
 
 	r.move((traceBackLines)*int(r.col)+r.previousCursor, 0)
 
@@ -212,6 +212,7 @@ func (r *Render) Render(buffer *Buffer, previousText string, completion *Complet
 
 	r.out.EraseLine()
 	r.out.EraseDown()
+
 	r.renderPrefix()
 
 	if buffer.NewLineCount() > 0 {
@@ -246,11 +247,12 @@ func (r *Render) Render(buffer *Buffer, previousText string, completion *Complet
 }
 
 func (r *Render) renderMultiline(buffer *Buffer) {
+	defer debug.Un(debug.Trace("renderMultiline"))
 	before := buffer.Document().TextBeforeCursor()
 	cursor := ""
 	after := ""
 
-	if len(buffer.Document().TextAfterCursor()) == 0 {
+	if runewidth.StringWidth(buffer.Document().TextAfterCursor()) == 0 {
 		cursor = " "
 		after = ""
 	} else {
@@ -260,6 +262,10 @@ func (r *Render) renderMultiline(buffer *Buffer) {
 		}
 		after = buffer.Document().TextAfterCursor()[1:]
 	}
+
+	debug.Log(fmt.Sprintln("before:", before))
+	debug.Log(fmt.Sprintln("cursor:", cursor))
+	debug.Log(fmt.Sprintln("after :", after))
 
 	r.out.SetColor(r.inputTextColor, r.inputBGColor, false)
 	r.out.WriteStr(before)
@@ -273,6 +279,8 @@ func (r *Render) renderMultiline(buffer *Buffer) {
 
 // BreakLine to break line.
 func (r *Render) BreakLine(buffer *Buffer) {
+	defer debug.Un(debug.Trace("BreakLine", buffer.Text()))
+	debug.Log(fmt.Sprintln("NewLineCount:", buffer.NewLineCount()))
 	// Erasing and Render
 	cursor := (buffer.NewLineCount() * int(r.col)) + runewidth.StringWidth(buffer.Document().TextBeforeCursor()) + runewidth.StringWidth(r.getCurrentPrefix())
 	r.clear(cursor)
@@ -291,21 +299,28 @@ func (r *Render) BreakLine(buffer *Buffer) {
 // clear erases the screen from a beginning of input
 // even if there is line break which means input length exceeds a window's width.
 func (r *Render) clear(cursor int) {
+	defer debug.Un(debug.Trace("clear", cursor))
 	r.move(cursor, 0)
+	r.out.EraseLine()
 	r.out.EraseDown()
 }
 
 // backward moves cursor to backward from a current cursor position
 // regardless there is a line break.
 func (r *Render) backward(from, n int) int {
+	defer debug.Un(debug.Trace("backward", from, n))
 	return r.move(from, from-n)
 }
 
 // move moves cursor to specified position from the beginning of input
 // even if there is a line break.
 func (r *Render) move(from, to int) int {
+	defer debug.Un(debug.Trace("move", from, to))
 	fromX, fromY := r.toPos(from)
 	toX, toY := r.toPos(to)
+
+	debug.Log(fmt.Sprintf("From: {%v,%v}\n", fromX, fromY))
+	debug.Log(fmt.Sprintf("To  : {%v,%v}\n", toX, toY))
 
 	r.out.CursorUp(fromY - toY)
 	r.out.CursorBackward(fromX - toX)
@@ -314,6 +329,7 @@ func (r *Render) move(from, to int) int {
 
 // toPos returns the relative position from the beginning of the string.
 func (r *Render) toPos(cursor int) (x, y int) {
+	defer debug.Un(debug.Trace("toPos", cursor))
 	col := int(r.col)
 	return cursor % col, cursor / col
 }
