@@ -113,7 +113,7 @@ func (r *Render) renderCompletion(buf *Buffer, completions *CompletionManager) {
 	r.prepareArea(windowHeight)
 
 	cursor := runewidth.StringWidth(prefix) + runewidth.StringWidth(buf.Document().TextBeforeCursor())
-	x, _ := r.toPos(cursor)
+	x, _ := r.toPos(cursor, buf.Document().TextBeforeCursor())
 	if x+width >= int(r.col) {
 		cursor = r.backward(cursor, x+width-int(r.col))
 	}
@@ -184,22 +184,29 @@ func (r *Render) Render(buffer *Buffer, previousText string, completion *Complet
 	}
 	defer func() { debug.AssertNoError(r.out.Flush()) }()
 
+	// previousCursorIndexInBuffer := r.previousCursor
+
 	line := strings.TrimSpace(buffer.Text())
-	debug.Log(fmt.Sprintln("Line:", line))
 	traceBackLines := strings.Count(previousText, "\n")
 	if len(line) == 0 {
 		// if the new buffer is empty, then we shouldn't traceback any
 		traceBackLines = 0
 	}
 	debug.Log(fmt.Sprintln("TraceBackLines:", traceBackLines))
+	debug.Log(fmt.Sprintln("r.col:", r.col))
+	debug.Log(fmt.Sprintln("r.previousCursor:", r.previousCursor))
 
-	r.move((traceBackLines)*int(r.col)+r.previousCursor, 0)
+	debug.Log(fmt.Sprintf("moving: %d", (traceBackLines)*int(r.col)+r.previousCursor))
+	r.moveForRender(r.previousCursor, 0, previousText)
 
 	prefix := r.getCurrentPrefix()
 	cursor := runewidth.StringWidth(prefix) + runewidth.StringWidth(line)
+	debug.Log(fmt.Sprintf("cursor: %d", cursor))
 
 	// prepare area
-	_, y := r.toPos((traceBackLines + int(r.col)) + cursor)
+	debug.Log(fmt.Sprintf("Calculating toPos from: %d", (traceBackLines+int(r.col))+cursor))
+	_, y := r.toPos(cursor, line)
+	debug.Log(fmt.Sprintf("y: %d", y))
 
 	h := y + 1 + int(completion.max)
 	if h > int(r.row) || completionMargin > int(r.col) {
@@ -247,7 +254,7 @@ func (r *Render) Render(buffer *Buffer, previousText string, completion *Complet
 }
 
 func (r *Render) renderMultiline(buffer *Buffer) {
-	defer debug.Un(debug.Trace("renderMultiline"))
+	// defer debug.Un(debug.Trace("renderMultiline"))
 	before := buffer.Document().TextBeforeCursor()
 	cursor := ""
 	after := ""
@@ -263,9 +270,9 @@ func (r *Render) renderMultiline(buffer *Buffer) {
 		after = buffer.Document().TextAfterCursor()[1:]
 	}
 
-	debug.Log(fmt.Sprintln("before:", before))
-	debug.Log(fmt.Sprintln("cursor:", cursor))
-	debug.Log(fmt.Sprintln("after :", after))
+	//	debug.Log(fmt.Sprintln("before:", before))
+	//	debug.Log(fmt.Sprintln("cursor:", cursor))
+	//	debug.Log(fmt.Sprintln("after :", after))
 
 	r.out.SetColor(r.inputTextColor, r.inputBGColor, false)
 	r.out.WriteStr(before)
@@ -280,10 +287,9 @@ func (r *Render) renderMultiline(buffer *Buffer) {
 // BreakLine to break line.
 func (r *Render) BreakLine(buffer *Buffer) {
 	defer debug.Un(debug.Trace("BreakLine", buffer.Text()))
-	debug.Log(fmt.Sprintln("NewLineCount:", buffer.NewLineCount()))
 	// Erasing and Render
-	cursor := (buffer.NewLineCount() * int(r.col)) + runewidth.StringWidth(buffer.Document().TextBeforeCursor()) + runewidth.StringWidth(r.getCurrentPrefix())
-	r.clear(cursor)
+	cursor := runewidth.StringWidth(buffer.Document().TextBeforeCursor()) + runewidth.StringWidth(r.getCurrentPrefix())
+	r.clear(cursor, buffer.Document().TextBeforeCursor())
 	r.renderPrefix()
 	r.out.SetColor(r.inputTextColor, r.inputBGColor, false)
 	r.out.WriteStr(buffer.Document().Text + "\n")
@@ -298,9 +304,9 @@ func (r *Render) BreakLine(buffer *Buffer) {
 
 // clear erases the screen from a beginning of input
 // even if there is line break which means input length exceeds a window's width.
-func (r *Render) clear(cursor int) {
-	defer debug.Un(debug.Trace("clear", cursor))
-	r.move(cursor, 0)
+func (r *Render) clear(cursor int, text string) {
+	defer debug.Un(debug.Trace("clear", cursor, text))
+	r.moveForRender(cursor, 0, text)
 	r.out.EraseLine()
 	r.out.EraseDown()
 }
@@ -308,7 +314,7 @@ func (r *Render) clear(cursor int) {
 // backward moves cursor to backward from a current cursor position
 // regardless there is a line break.
 func (r *Render) backward(from, n int) int {
-	defer debug.Un(debug.Trace("backward", from, n))
+	// defer debug.Un(debug.Trace("backward", from, n))
 	return r.move(from, from-n)
 }
 
@@ -316,8 +322,26 @@ func (r *Render) backward(from, n int) int {
 // even if there is a line break.
 func (r *Render) move(from, to int) int {
 	defer debug.Un(debug.Trace("move", from, to))
-	fromX, fromY := r.toPos(from)
-	toX, toY := r.toPos(to)
+	fromX, fromY := r.toPos(from, "")
+	toX, toY := r.toPos(to, "")
+
+	debug.Log(fmt.Sprintf("From: {%v,%v}\n", fromX, fromY))
+	debug.Log(fmt.Sprintf("To  : {%v,%v}\n", toX, toY))
+
+	r.out.CursorUp(fromY - toY)
+	r.out.CursorBackward(fromX - toX)
+	return to
+}
+
+func (r *Render) moveForRender(from, to int, text string) int {
+	defer debug.Un(debug.Trace("moveForRender", from, to))
+	text = fmt.Sprintf("%s%s", r.getCurrentPrefix(), text)
+
+	lineCount := strings.Count(text, "\n")
+	col := int(r.col)
+
+	fromX, fromY := r.toPos((col*lineCount)+from, text)
+	toX, toY := r.toPos(to, text)
 
 	debug.Log(fmt.Sprintf("From: {%v,%v}\n", fromX, fromY))
 	debug.Log(fmt.Sprintf("To  : {%v,%v}\n", toX, toY))
@@ -328,10 +352,82 @@ func (r *Render) move(from, to int) int {
 }
 
 // toPos returns the relative position from the beginning of the string.
-func (r *Render) toPos(cursor int) (x, y int) {
+func (r *Render) toPos(cursor int, text string) (x, y int) {
 	defer debug.Un(debug.Trace("toPos", cursor))
-	col := int(r.col)
-	return cursor % col, cursor / col
+
+	// var start, end, lineCount int
+	cols := int(r.col)
+
+	type Block struct {
+		start int
+		end   int
+	}
+
+	lineBlocks := []Block{}
+
+	// calculate the locations of the start and end of each line
+	for idx, line := range strings.Split(text, "\n") {
+
+		// put the newline back in
+		line := fmt.Sprintf("%s\n", line)
+
+		newBlocks := []Block{}
+		thisBlock := Block{}
+
+		if idx == 0 {
+			thisBlock.start = 0
+			thisBlock.end = (len(line) - 1)
+		} else {
+			thisBlock.start = lineBlocks[idx-1].end + 1
+			thisBlock.end = thisBlock.start + (len(line) - 1)
+		}
+
+		// normalize by max columns
+		for {
+			lengthOfThisBlock := thisBlock.end - thisBlock.start
+			if lengthOfThisBlock > cols {
+				newBlock := Block{
+					start: thisBlock.start,
+					end:   thisBlock.start + cols - 1,
+				}
+				// put the generated block in
+				newBlocks = append(newBlocks, newBlock)
+
+				thisBlock = Block{
+					start: thisBlock.start + cols,
+					end:   thisBlock.end,
+				}
+			}
+			break
+		}
+
+		// put in the remaining block
+		newBlocks = append(newBlocks, thisBlock)
+
+		lineBlocks = append(lineBlocks, newBlocks...)
+
+	}
+
+	for idx, block := range lineBlocks {
+		if cursor > block.start && cursor < block.end {
+			y = idx
+			x = cursor - block.start
+		}
+	}
+
+	// lines := strings.Split(text, "\n")
+	// for i, line := range lines {
+	// 	length := runewidth.StringWidth(line)
+	// 	start = end
+	// 	end += length
+	// 	lineCount += (length / cols) + 1
+	// 	if end > cursor {
+	// 		y = i
+	// 		break
+	// 	}
+	// 	x = (cursor - start) % cols
+	// }
+	return
 }
 
 func (r *Render) lineWrap(cursor int) {
