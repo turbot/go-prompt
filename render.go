@@ -93,6 +93,7 @@ func (r *Render) renderWindowTooSmall() {
 }
 
 func (r *Render) renderCompletion(buf *Buffer, completions *CompletionManager) {
+	defer debug.Un(debug.Trace("renderCompletion"))
 	suggestions := completions.GetSuggestions()
 	if len(completions.GetSuggestions()) == 0 {
 		return
@@ -115,6 +116,7 @@ func (r *Render) renderCompletion(buf *Buffer, completions *CompletionManager) {
 	cursor := runewidth.StringWidth(prefix) + runewidth.StringWidth(buf.Document().TextBeforeCursor())
 	x, _ := r.toPos(cursor, buf.Text())
 	if x+width >= int(r.col) {
+		debug.Log(fmt.Sprintln("x+width", x+width))
 		cursor = r.backward(cursor, x+width-int(r.col), buf.Text())
 	}
 
@@ -157,7 +159,7 @@ func (r *Render) renderCompletion(buf *Buffer, completions *CompletionManager) {
 		r.out.SetColor(DefaultColor, DefaultColor, false)
 
 		r.lineWrap(cursor + width)
-		r.backward(cursor+width, width, buf.Text())
+		r.backward(cursor+width, width, "")
 	}
 
 	if x+width >= int(r.col) {
@@ -202,6 +204,9 @@ func (r *Render) Render(buffer *Buffer, previousText string, completion *Complet
 	// Rendering
 	r.out.HideCursor()
 	defer r.out.ShowCursor()
+
+	r.out.EraseLine()
+	r.out.EraseDown()
 
 	r.renderPrefix()
 	r.out.SetColor(r.inputTextColor, r.inputBGColor, false)
@@ -293,7 +298,7 @@ func (r *Render) clear(cursor int, text string) {
 // backward moves cursor to backward from a current cursor position
 // regardless there is a line break.
 func (r *Render) backward(from, n int, text string) int {
-	// defer debug.Un(debug.Trace("backward", from, n))
+	defer debug.Un(debug.Trace("backward", from, n))
 	return r.move(from, from-n, text)
 }
 
@@ -316,65 +321,18 @@ func (r *Render) move(from, to int, text string) int {
 func (r *Render) toPos(cursor int, text string) (x, y int) {
 	defer debug.Un(debug.Trace("toPos", cursor, text))
 
+	defer func() {
+		debug.Log(fmt.Sprintf("Returning: {%v,%v}\n", x, y))
+	}()
+
 	// var start, end, lineCount int
 	cols := int(r.col)
 
-	// type Block struct {
-	// 	start int
-	// 	end   int
-	// }
-
-	// lineBlocks := []Block{}
-
-	// // calculate the locations of the start and end of each line
-	// for idx, line := range strings.Split(text, "\n") {
-
-	// 	// put the newline back in
-	// 	line := fmt.Sprintf("%s\n", line)
-
-	// 	newBlocks := []Block{}
-	// 	thisBlock := Block{}
-
-	// 	if idx == 0 {
-	// 		thisBlock.start = 0
-	// 		thisBlock.end = (len(line) - 1)
-	// 	} else {
-	// 		thisBlock.start = lineBlocks[idx-1].end + 1
-	// 		thisBlock.end = thisBlock.start + (len(line) - 1)
-	// 	}
-
-	// 	// normalize by max columns
-	// 	for {
-	// 		lengthOfThisBlock := thisBlock.end - thisBlock.start
-	// 		if lengthOfThisBlock > cols {
-	// 			newBlock := Block{
-	// 				start: thisBlock.start,
-	// 				end:   thisBlock.start + cols - 1,
-	// 			}
-	// 			// put the generated block in
-	// 			newBlocks = append(newBlocks, newBlock)
-
-	// 			thisBlock = Block{
-	// 				start: thisBlock.start + cols,
-	// 				end:   thisBlock.end,
-	// 			}
-	// 		}
-	// 		break
-	// 	}
-
-	// 	// put in the remaining block
-	// 	newBlocks = append(newBlocks, thisBlock)
-
-	// 	lineBlocks = append(lineBlocks, newBlocks...)
-
-	// }
-
-	// for idx, block := range lineBlocks {
-	// 	if cursor > block.start && cursor < block.end {
-	// 		y = idx
-	// 		x = cursor - block.start
-	// 	}
-	// }
+	if strings.Count(text, "\n") == 0 {
+		x = cursor % cols
+		y = cursor / cols
+		return
+	}
 
 	var start, end, lineCount int
 	text = fmt.Sprintf("%s%s", r.getCurrentPrefix(), text)
