@@ -113,7 +113,7 @@ func (r *Render) renderCompletion(buf *Buffer, completions *CompletionManager) {
 	r.prepareArea(windowHeight)
 
 	cursor := runewidth.StringWidth(prefix) + runewidth.StringWidth(buf.Document().TextBeforeCursor())
-	x, _ := r.toPos(cursor, buf.Document().TextBeforeCursor())
+	x, _ := r.toPos(cursor, buf.Text())
 	if x+width >= int(r.col) {
 		cursor = r.backward(cursor, x+width-int(r.col), buf.Text())
 	}
@@ -308,7 +308,7 @@ func (r *Render) move(from, to int, text string) int {
 	debug.Log(fmt.Sprintf("To  : {%v,%v}\n", toX, toY))
 
 	r.out.CursorUp(fromY - toY)
-	r.out.CursorBackward((fromX + 3) - toX)
+	r.out.CursorBackward((fromX + strings.Count(text, "\n")) - toX)
 	return to
 }
 
@@ -377,6 +377,7 @@ func (r *Render) toPos(cursor int, text string) (x, y int) {
 	// }
 
 	var start, end, lineCount int
+	text = fmt.Sprintf("%s%s", r.getCurrentPrefix(), text)
 	for _, line := range strings.Split(text, "\n") {
 		line = fmt.Sprintf("%s\n", line)
 		length := len(line)
