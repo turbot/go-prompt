@@ -5,9 +5,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/c-bata/go-prompt/internal/bisect"
-	"github.com/c-bata/go-prompt/internal/debug"
 	istrings "github.com/c-bata/go-prompt/internal/strings"
-	runewidth "github.com/mattn/go-runewidth"
 )
 
 // Document has text displayed in terminal and cursor position.
@@ -39,7 +37,7 @@ func (d *Document) DisplayCursorPosition() int {
 	var position int
 	runes := []rune(d.Text)[:d.cursorPosition]
 	for i := range runes {
-		position += runewidth.RuneWidth(runes[i])
+		position += utf8.RuneLen(runes[i])
 	}
 	return position
 }
@@ -315,7 +313,7 @@ func (d *Document) CursorPositionRow() (row int) {
 func (d *Document) CursorPositionCol() (col int) {
 	// Don't use self.text_before_cursor to calculate this. Creating substrings
 	// and splitting is too expensive for getting the cursor position.
-	defer debug.Un(debug.Trace("CursorPositionCol"))
+
 	_, index := d.findLineStartIndex(d.cursorPosition)
 	col = d.cursorPosition - index
 	return
@@ -346,7 +344,6 @@ func (d *Document) GetCursorRightPosition(count int) int {
 // GetCursorUpPosition return the relative cursor position (character index) where we would be
 // if the user pressed the arrow-up button.
 func (d *Document) GetCursorUpPosition(count int, preferredColumn int) int {
-	defer debug.Un(debug.Trace("GetCursorUpPosition", count, preferredColumn))
 	var col int
 	if preferredColumn == -1 { // -1 means nil
 		col = d.CursorPositionCol()
@@ -397,7 +394,6 @@ func (d *Document) TranslateIndexToPosition(index int) (row int, col int) {
 // TranslateRowColToIndex given a (row, col), return the corresponding index.
 // (Row and col params are 0-based.)
 func (d *Document) TranslateRowColToIndex(row int, column int) (index int) {
-	defer debug.Un(debug.Trace("TranslateRowColToIndex", row, column))
 	indexes := d.lineStartIndexes()
 	if row < 0 {
 		row = 0
