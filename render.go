@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"runtime"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/c-bata/go-prompt/internal/debug"
-	runewidth "github.com/mattn/go-runewidth"
 )
 
 // Render to render prompt information from state of Buffer.
@@ -101,7 +101,7 @@ func (r *Render) renderCompletion(buf *Buffer, completions *CompletionManager) {
 	prefix := r.getCurrentPrefix()
 	formatted, width := formatSuggestions(
 		suggestions,
-		int(r.col)-runewidth.StringWidth(prefix)-1, // -1 means a width of scrollbar
+		int(r.col)-utf8.RuneCountInString(prefix)-1, // -1 means a width of scrollbar
 	)
 	// +1 means a width of scrollbar.
 	width++
@@ -113,7 +113,7 @@ func (r *Render) renderCompletion(buf *Buffer, completions *CompletionManager) {
 	formatted = formatted[completions.verticalScroll : completions.verticalScroll+windowHeight]
 	r.prepareArea(windowHeight)
 
-	cursor := runewidth.StringWidth(prefix) + runewidth.StringWidth(buf.Document().TextBeforeCursor())
+	cursor := utf8.RuneCountInString(prefix) + utf8.RuneCountInString(buf.Document().TextBeforeCursor())
 	x, _ := r.toPos(cursor, buf.Text())
 	if x+width >= int(r.col) {
 		debug.Log(fmt.Sprintln("x+width", x+width))
@@ -188,7 +188,7 @@ func (r *Render) Render(buffer *Buffer, previousText string, completion *Complet
 
 	line := buffer.Text()
 	prefix := r.getCurrentPrefix()
-	cursor := runewidth.StringWidth(prefix) + runewidth.StringWidth(line)
+	cursor := utf8.RuneCountInString(prefix) + utf8.RuneCountInString(line)
 
 	r.move(r.previousCursor, 0, previousText)
 
@@ -216,63 +216,32 @@ func (r *Render) Render(buffer *Buffer, previousText string, completion *Complet
 
 	r.out.EraseDown()
 
-	cursor = r.backward(cursor, runewidth.StringWidth(line)-buffer.DisplayCursorPosition(), buffer.Text())
+	cursor = r.backward(cursor, utf8.RuneCountInString(line)-buffer.DisplayCursorPosition(), buffer.Text())
 
 	r.renderCompletion(buffer, completion)
 	if suggest, ok := completion.GetSelectedSuggestion(); ok {
-		cursor = r.backward(cursor, runewidth.StringWidth(buffer.Document().GetWordBeforeCursorUntilSeparator(completion.wordSeparator)), buffer.Text())
+		cursor = r.backward(cursor, utf8.RuneCountInString(buffer.Document().GetWordBeforeCursorUntilSeparator(completion.wordSeparator)), buffer.Text())
 
 		r.out.SetColor(r.previewSuggestionTextColor, r.previewSuggestionBGColor, false)
 		r.out.WriteStr(suggest.Text)
 		r.out.SetColor(DefaultColor, DefaultColor, false)
-		cursor += runewidth.StringWidth(suggest.Text)
+		cursor += utf8.RuneCountInString(suggest.Text)
 
 		rest := buffer.Document().TextAfterCursor()
 		r.out.WriteStr(rest)
-		cursor += runewidth.StringWidth(rest)
+		cursor += utf8.RuneCountInString(rest)
 		r.lineWrap(cursor)
 
-		cursor = r.backward(cursor, runewidth.StringWidth(rest), rest)
+		cursor = r.backward(cursor, utf8.RuneCountInString(rest), rest)
 	}
 	r.previousCursor = cursor
 }
-
-// func (r *Render) renderMultiline(buffer *Buffer) {
-// 	// defer debug.Un(debug.Trace("renderMultiline"))
-// 	before := buffer.Document().TextBeforeCursor()
-// 	cursor := ""
-// 	after := ""
-
-// 	if runewidth.StringWidth(buffer.Document().TextAfterCursor()) == 0 {
-// 		cursor = " "
-// 		after = ""
-// 	} else {
-// 		cursor = string(buffer.Text()[buffer.Document().cursorPosition])
-// 		if cursor == "\n" {
-// 			cursor = " \n"
-// 		}
-// 		after = buffer.Document().TextAfterCursor()[1:]
-// 	}
-
-// 	//	debug.Log(fmt.Sprintln("before:", before))
-// 	//	debug.Log(fmt.Sprintln("cursor:", cursor))
-// 	//	debug.Log(fmt.Sprintln("after :", after))
-
-// 	r.out.SetColor(r.inputTextColor, r.inputBGColor, false)
-// 	r.out.WriteStr(before)
-
-// 	r.out.SetDisplayAttributes(r.inputTextColor, r.inputBGColor, DisplayReverse)
-// 	r.out.WriteStr(cursor)
-
-// 	r.out.SetColor(r.inputTextColor, r.inputBGColor, false)
-// 	r.out.WriteStr(after)
-// }
 
 // BreakLine to break line.
 func (r *Render) BreakLine(buffer *Buffer) {
 	defer debug.Un(debug.Trace("BreakLine", buffer.Text()))
 	// Erasing and Render
-	cursor := runewidth.StringWidth(buffer.Document().TextBeforeCursor()) + runewidth.StringWidth(r.getCurrentPrefix())
+	cursor := utf8.RuneCountInString(buffer.Document().TextBeforeCursor()) + utf8.RuneCountInString(r.getCurrentPrefix())
 	r.clear(cursor, buffer.Document().TextBeforeCursor())
 	r.renderPrefix()
 	r.out.SetColor(r.inputTextColor, r.inputBGColor, false)
@@ -313,7 +282,7 @@ func (r *Render) move(from, to int, text string) int {
 	debug.Log(fmt.Sprintf("To  : {%v,%v}\n", toX, toY))
 
 	r.out.CursorUp(fromY - toY)
-	r.out.CursorBackward((fromX + strings.Count(text, "\n")) - toX)
+	r.out.CursorBackward(fromX - toX)
 	return to
 }
 
