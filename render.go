@@ -307,7 +307,7 @@ func (r *Render) toPos(cursor int, text string) (x, y int) {
 	text = fmt.Sprintf("%s%s", r.getCurrentPrefix(), text)
 	for _, line := range strings.Split(text, "\n") {
 		line = fmt.Sprintf("%s\n", line)
-		length := len(line)
+		length := utf8.RuneCountInString(line)
 		end = start + length - 1
 		if end >= cursor {
 			x := (cursor - start) % cols
