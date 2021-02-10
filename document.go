@@ -7,7 +7,6 @@ import (
 	"github.com/c-bata/go-prompt/internal/bisect"
 	"github.com/c-bata/go-prompt/internal/debug"
 	istrings "github.com/c-bata/go-prompt/internal/strings"
-	runewidth "github.com/mattn/go-runewidth"
 )
 
 // Document has text displayed in terminal and cursor position.
@@ -36,12 +35,13 @@ func (d *Document) LastKeyStroke() Key {
 // DisplayCursorPosition returns the cursor position on rendered text on terminal emulators.
 // So if Document is "日本(cursor)語", DisplayedCursorPosition returns 4 because '日' and '本' are double width characters.
 func (d *Document) DisplayCursorPosition() int {
-	var position int
-	runes := []rune(d.Text)[:d.cursorPosition]
-	for i := range runes {
-		position += runewidth.RuneWidth(runes[i])
-	}
-	return position
+	return d.cursorPosition
+	// var position int
+	// runes := []rune(d.Text)[:d.cursorPosition]
+	// for i := range runes {
+	// 	position += utf8.RuneLen(runes[i])
+	// }
+	// return position
 }
 
 // GetCharRelativeToCursor return character relative to cursor position, or empty string
@@ -201,16 +201,16 @@ func (d *Document) FindEndOfCurrentWord() int {
 // FindEndOfCurrentWordWithSpace is almost the same as FindEndOfCurrentWord.
 // The only difference is to ignore contiguous spaces.
 func (d *Document) FindEndOfCurrentWordWithSpace() int {
+	defer debug.Un(debug.Trace("FindEndOfCurrentWordWithSpace"))
 	x := d.TextAfterCursor()
-
 	start := istrings.IndexNotByte(x, ' ')
 	if start == -1 {
-		return len(x)
+		return utf8.RuneCountInString(x)
 	}
 
 	end := strings.IndexByte(x[start:], ' ')
 	if end == -1 {
-		return len(x)
+		return utf8.RuneCountInString(x)
 	}
 
 	return start + end
@@ -315,7 +315,7 @@ func (d *Document) CursorPositionRow() (row int) {
 func (d *Document) CursorPositionCol() (col int) {
 	// Don't use self.text_before_cursor to calculate this. Creating substrings
 	// and splitting is too expensive for getting the cursor position.
-	defer debug.Un(debug.Trace("CursorPositionCol"))
+
 	_, index := d.findLineStartIndex(d.cursorPosition)
 	col = d.cursorPosition - index
 	return
@@ -334,19 +334,19 @@ func (d *Document) GetCursorLeftPosition(count int) int {
 
 // GetCursorRightPosition returns relative position for cursor right.
 func (d *Document) GetCursorRightPosition(count int) int {
+	defer debug.Un(debug.Trace("GetCursorRightPosition", count))
 	if count < 0 {
 		return d.GetCursorLeftPosition(-count)
 	}
-	if len(d.CurrentLineAfterCursor()) > count {
+	if utf8.RuneCountInString(d.CurrentLineAfterCursor()) > count {
 		return count
 	}
-	return len(d.CurrentLineAfterCursor())
+	return utf8.RuneCountInString(d.CurrentLineAfterCursor())
 }
 
 // GetCursorUpPosition return the relative cursor position (character index) where we would be
 // if the user pressed the arrow-up button.
 func (d *Document) GetCursorUpPosition(count int, preferredColumn int) int {
-	defer debug.Un(debug.Trace("GetCursorUpPosition", count, preferredColumn))
 	var col int
 	if preferredColumn == -1 { // -1 means nil
 		col = d.CursorPositionCol()
@@ -397,7 +397,6 @@ func (d *Document) TranslateIndexToPosition(index int) (row int, col int) {
 // TranslateRowColToIndex given a (row, col), return the corresponding index.
 // (Row and col params are 0-based.)
 func (d *Document) TranslateRowColToIndex(row int, column int) (index int) {
-	defer debug.Un(debug.Trace("TranslateRowColToIndex", row, column))
 	indexes := d.lineStartIndexes()
 	if row < 0 {
 		row = 0

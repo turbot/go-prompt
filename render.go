@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"runtime"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/c-bata/go-prompt/internal/debug"
-	runewidth "github.com/mattn/go-runewidth"
 )
 
 // Render to render prompt information from state of Buffer.
@@ -93,6 +93,7 @@ func (r *Render) renderWindowTooSmall() {
 }
 
 func (r *Render) renderCompletion(buf *Buffer, completions *CompletionManager) {
+	defer debug.Un(debug.Trace("renderCompletion"))
 	suggestions := completions.GetSuggestions()
 	if len(completions.GetSuggestions()) == 0 {
 		return
@@ -100,7 +101,7 @@ func (r *Render) renderCompletion(buf *Buffer, completions *CompletionManager) {
 	prefix := r.getCurrentPrefix()
 	formatted, width := formatSuggestions(
 		suggestions,
-		int(r.col)-runewidth.StringWidth(prefix)-1, // -1 means a width of scrollbar
+		int(r.col)-utf8.RuneCountInString(prefix)-1, // -1 means a width of scrollbar
 	)
 	// +1 means a width of scrollbar.
 	width++
@@ -112,10 +113,11 @@ func (r *Render) renderCompletion(buf *Buffer, completions *CompletionManager) {
 	formatted = formatted[completions.verticalScroll : completions.verticalScroll+windowHeight]
 	r.prepareArea(windowHeight)
 
-	cursor := runewidth.StringWidth(prefix) + runewidth.StringWidth(buf.Document().TextBeforeCursor())
-	x, _ := r.toPos(cursor)
+	cursor := utf8.RuneCountInString(prefix) + utf8.RuneCountInString(buf.Document().TextBeforeCursor())
+	x, _ := r.toPos(cursor, buf.Text())
 	if x+width >= int(r.col) {
-		cursor = r.backward(cursor, x+width-int(r.col))
+		debug.Log(fmt.Sprintln("x+width", x+width))
+		cursor = r.backward(cursor, x+width-int(r.col), buf.Text())
 	}
 
 	contentHeight := len(completions.tmp)
@@ -157,7 +159,7 @@ func (r *Render) renderCompletion(buf *Buffer, completions *CompletionManager) {
 		r.out.SetColor(DefaultColor, DefaultColor, false)
 
 		r.lineWrap(cursor + width)
-		r.backward(cursor+width, width)
+		r.backward(cursor+width, width, "")
 	}
 
 	if x+width >= int(r.col) {
@@ -185,21 +187,13 @@ func (r *Render) Render(buffer *Buffer, previousText string, completion *Complet
 	defer func() { debug.AssertNoError(r.out.Flush()) }()
 
 	line := buffer.Text()
-	traceBackLines := strings.Count(previousText, "\n")
-	if len(line) == 0 {
-		// if the new buffer is empty, then we shouldn't traceback any
-		traceBackLines = 0
-	}
-	debug.Log(fmt.Sprintln(line))
-	debug.Log(fmt.Sprintln(traceBackLines))
-
-	r.move((traceBackLines)*int(r.col)+r.previousCursor, 0)
-
 	prefix := r.getCurrentPrefix()
-	cursor := runewidth.StringWidth(prefix) + runewidth.StringWidth(line)
+	cursor := utf8.RuneCountInString(prefix) + utf8.RuneCountInString(line)
+
+	r.move(r.previousCursor, 0, previousText)
 
 	// prepare area
-	_, y := r.toPos((traceBackLines + int(r.col)) + cursor)
+	_, y := r.toPos(cursor, line)
 
 	h := y + 1 + int(completion.max)
 	if h > int(r.row) || completionMargin > int(r.col) {
@@ -209,73 +203,46 @@ func (r *Render) Render(buffer *Buffer, previousText string, completion *Complet
 
 	// Rendering
 	r.out.HideCursor()
+	defer r.out.ShowCursor()
 
 	r.out.EraseLine()
 	r.out.EraseDown()
+
 	r.renderPrefix()
-
-	if buffer.NewLineCount() > 0 {
-		r.renderMultiline(buffer)
-	} else {
-		r.out.WriteStr(line)
-		defer r.out.ShowCursor()
-	}
-
-	r.lineWrap(cursor)
+	r.out.SetColor(r.inputTextColor, r.inputBGColor, false)
+	r.out.WriteStr(line)
 	r.out.SetColor(DefaultColor, DefaultColor, false)
+	r.lineWrap(cursor)
 
-	cursor = r.backward(cursor, runewidth.StringWidth(line)-buffer.DisplayCursorPosition())
+	r.out.EraseDown()
+
+	cursor = r.backward(cursor, utf8.RuneCountInString(line)-buffer.DisplayCursorPosition(), buffer.Text())
 
 	r.renderCompletion(buffer, completion)
 	if suggest, ok := completion.GetSelectedSuggestion(); ok {
-		cursor = r.backward(cursor, runewidth.StringWidth(buffer.Document().GetWordBeforeCursorUntilSeparator(completion.wordSeparator)))
+		cursor = r.backward(cursor, utf8.RuneCountInString(buffer.Document().GetWordBeforeCursorUntilSeparator(completion.wordSeparator)), buffer.Text())
 
 		r.out.SetColor(r.previewSuggestionTextColor, r.previewSuggestionBGColor, false)
 		r.out.WriteStr(suggest.Text)
 		r.out.SetColor(DefaultColor, DefaultColor, false)
-		cursor += runewidth.StringWidth(suggest.Text)
+		cursor += utf8.RuneCountInString(suggest.Text)
 
 		rest := buffer.Document().TextAfterCursor()
 		r.out.WriteStr(rest)
-		cursor += runewidth.StringWidth(rest)
+		cursor += utf8.RuneCountInString(rest)
 		r.lineWrap(cursor)
 
-		cursor = r.backward(cursor, runewidth.StringWidth(rest))
+		cursor = r.backward(cursor, utf8.RuneCountInString(rest), rest)
 	}
 	r.previousCursor = cursor
 }
 
-func (r *Render) renderMultiline(buffer *Buffer) {
-	before := buffer.Document().TextBeforeCursor()
-	cursor := ""
-	after := ""
-
-	if len(buffer.Document().TextAfterCursor()) == 0 {
-		cursor = " "
-		after = ""
-	} else {
-		cursor = string(buffer.Text()[buffer.Document().cursorPosition])
-		if cursor == "\n" {
-			cursor = " \n"
-		}
-		after = buffer.Document().TextAfterCursor()[1:]
-	}
-
-	r.out.SetColor(r.inputTextColor, r.inputBGColor, false)
-	r.out.WriteStr(before)
-
-	r.out.SetDisplayAttributes(r.inputTextColor, r.inputBGColor, DisplayReverse)
-	r.out.WriteStr(cursor)
-
-	r.out.SetColor(r.inputTextColor, r.inputBGColor, false)
-	r.out.WriteStr(after)
-}
-
 // BreakLine to break line.
 func (r *Render) BreakLine(buffer *Buffer) {
+	defer debug.Un(debug.Trace("BreakLine", buffer.Text()))
 	// Erasing and Render
-	cursor := (buffer.NewLineCount() * int(r.col)) + runewidth.StringWidth(buffer.Document().TextBeforeCursor()) + runewidth.StringWidth(r.getCurrentPrefix())
-	r.clear(cursor)
+	cursor := utf8.RuneCountInString(buffer.Document().TextBeforeCursor()) + utf8.RuneCountInString(r.getCurrentPrefix())
+	r.clear(cursor, buffer.Document().TextBeforeCursor())
 	r.renderPrefix()
 	r.out.SetColor(r.inputTextColor, r.inputBGColor, false)
 	r.out.WriteStr(buffer.Document().Text + "\n")
@@ -290,22 +257,29 @@ func (r *Render) BreakLine(buffer *Buffer) {
 
 // clear erases the screen from a beginning of input
 // even if there is line break which means input length exceeds a window's width.
-func (r *Render) clear(cursor int) {
-	r.move(cursor, 0)
+func (r *Render) clear(cursor int, text string) {
+	defer debug.Un(debug.Trace("clear", cursor, text))
+	r.move(cursor, 0, text)
+	r.out.EraseLine()
 	r.out.EraseDown()
 }
 
 // backward moves cursor to backward from a current cursor position
 // regardless there is a line break.
-func (r *Render) backward(from, n int) int {
-	return r.move(from, from-n)
+func (r *Render) backward(from, n int, text string) int {
+	defer debug.Un(debug.Trace("backward", from, n))
+	return r.move(from, from-n, text)
 }
 
 // move moves cursor to specified position from the beginning of input
 // even if there is a line break.
-func (r *Render) move(from, to int) int {
-	fromX, fromY := r.toPos(from)
-	toX, toY := r.toPos(to)
+func (r *Render) move(from, to int, text string) int {
+	defer debug.Un(debug.Trace("move", from, to))
+	fromX, fromY := r.toPos(from, text)
+	toX, toY := r.toPos(to, text)
+
+	debug.Log(fmt.Sprintf("From: {%v,%v}\n", fromX, fromY))
+	debug.Log(fmt.Sprintf("To  : {%v,%v}\n", toX, toY))
 
 	r.out.CursorUp(fromY - toY)
 	r.out.CursorBackward(fromX - toX)
@@ -313,9 +287,39 @@ func (r *Render) move(from, to int) int {
 }
 
 // toPos returns the relative position from the beginning of the string.
-func (r *Render) toPos(cursor int) (x, y int) {
-	col := int(r.col)
-	return cursor % col, cursor / col
+func (r *Render) toPos(cursor int, text string) (x, y int) {
+	defer debug.Un(debug.Trace("toPos", cursor, text))
+
+	defer func() {
+		debug.Log(fmt.Sprintf("Returning: {%v,%v}\n", x, y))
+	}()
+
+	// var start, end, lineCount int
+	cols := int(r.col)
+
+	if strings.Count(text, "\n") == 0 {
+		x = cursor % cols
+		y = cursor / cols
+		return
+	}
+
+	var start, end, lineCount int
+	text = fmt.Sprintf("%s%s", r.getCurrentPrefix(), text)
+	for _, line := range strings.Split(text, "\n") {
+		line = fmt.Sprintf("%s\n", line)
+		length := utf8.RuneCountInString(line)
+		end = start + length - 1
+		if end >= cursor {
+			x := (cursor - start) % cols
+			y := lineCount + (cursor-start)/cols
+			return x, y
+		}
+		// if length 0 to cols, add 1
+		// if length cols+1 to (2*cols)-1, add 2 - etc.
+		lineCount += ((length - 1) / cols) + 1
+		start = end + 1
+	}
+	return
 }
 
 func (r *Render) lineWrap(cursor int) {

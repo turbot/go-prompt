@@ -52,7 +52,8 @@ func Log(msg string) {
 	writeWithSync(calldepth, msg)
 }
 func Trace(s string, args ...interface{}) string {
-	writeWithSync(2, fmt.Sprintln("\n\n------------entering:", s, args))
+	writeWithSync(2, fmt.Sprintln())
+	writeWithSync(2, fmt.Sprintln("------------entering:", s, args))
 	return s
 }
 func Un(s string) {
