@@ -258,6 +258,14 @@ func OptionBreakLineCallback(fn func(*Document)) Option {
 	}
 }
 
+// OptionContinueOnEnterCallback to run a callback which checks whether the executor should run
+func OptionContinueOnEnterCallback(fn func(*Buffer) bool) Option {
+	return func(p *Prompt) error {
+		p.continuePredicate = fn
+		return nil
+	}
+}
+
 // OptionSetExitCheckerOnInput set an exit function which checks if go-prompt exits its Run loop
 func OptionSetExitCheckerOnInput(fn ExitChecker) Option {
 	return func(p *Prompt) error {

@@ -11,6 +11,9 @@ import (
 // Executor is called when user input something text.
 type Executor func(string)
 
+// ContinueOnEnter is called when an Enter key is pressed and before the executor is called
+type ContinueOnEnter func(b *Buffer) bool
+
 // ExitChecker is called after user input to check if prompt must stop and exit go-prompt Run loop.
 // User input means: selecting/typing an entry, then, if said entry content matches the ExitChecker function criteria:
 // - immediate exit (if breakline is false) without executor called
@@ -28,6 +31,7 @@ type Prompt struct {
 	prevText          string
 	renderer          *Render
 	executor          Executor
+	continuePredicate ContinueOnEnter
 	history           *History
 	completion        *CompletionManager
 	keyBindings       []KeyBind
@@ -129,12 +133,19 @@ func (p *Prompt) feed(b []byte) (shouldExit bool, exec *Exec) {
 
 	switch key {
 	case Enter, ControlJ, ControlM:
-		p.renderer.BreakLine(p.buf)
-
-		exec = &Exec{input: p.buf.Text()}
-		p.buf = NewBuffer()
-		if exec.input != "" {
-			p.history.Add(exec.input)
+		cnt := true
+		if p.continuePredicate != nil {
+			cnt = p.continuePredicate(p.buf)
+		}
+		if !cnt {
+			p.renderer.BreakLine(p.buf)
+			exec = &Exec{input: p.buf.Text()}
+			p.buf = NewBuffer()
+			if exec.input != "" {
+				p.history.Add(exec.input)
+			}
+		} else {
+			p.buf.InsertText("\n", false, true)
 		}
 	case ControlC:
 		p.renderer.BreakLine(p.buf)
