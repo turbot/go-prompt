@@ -315,7 +315,7 @@ func (r *Render) toPos(cursor int, text string) (x, y int) {
 			return x, y
 		}
 		// if length 0 to cols, add 1
-		// if length cols+1 to (2*cols)-1
+		// if length cols+1 to (2*cols)-1, add 2 - etc.
 		lineCount += ((length - 1) / cols) + 1
 		start = end + 1
 	}
