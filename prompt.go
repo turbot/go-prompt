@@ -51,75 +51,10 @@ func (p *Prompt) ClearScreen() {
 
 // Run starts prompt.
 func (p *Prompt) Run() {
-	p.skipTearDown = false
-	defer debug.Teardown()
-	debug.Log("start prompt")
-	p.setUp()
-	defer p.tearDown()
-
-	if p.completion.showAtStart {
-		p.completion.Update(*p.buf.Document())
-	}
-
-	p.renderer.Render(p.buf, p.prevText, p.completion)
-
-	bufCh := make(chan []byte, 128)
-	stopReadBufCh := make(chan struct{})
-	go p.readBuffer(bufCh, stopReadBufCh)
-
-	exitCh := make(chan int)
-	winSizeCh := make(chan *WinSize)
-	stopHandleSignalCh := make(chan struct{})
-	go p.handleSignals(exitCh, winSizeCh, stopHandleSignalCh)
-
-	for {
-		select {
-		case b := <-bufCh:
-			if shouldExit, e := p.feed(b); shouldExit {
-				p.renderer.BreakLine(p.buf)
-				stopReadBufCh <- struct{}{}
-				stopHandleSignalCh <- struct{}{}
-				return
-			} else if e != nil {
-				// Stop goroutine to run readBuffer function
-				stopReadBufCh <- struct{}{}
-				stopHandleSignalCh <- struct{}{}
-
-				// Unset raw mode
-				// Reset to Blocking mode because returned EAGAIN when still set non-blocking mode.
-				debug.AssertNoError(p.in.TearDown())
-				p.executor(e.input)
-
-				p.completion.Update(*p.buf.Document())
-
-				p.renderer.Render(p.buf, p.prevText, p.completion)
-
-				if p.exitChecker != nil && p.exitChecker(e.input, true) {
-					p.skipTearDown = true
-					return
-				}
-				// Set raw mode
-				debug.AssertNoError(p.in.Setup())
-				go p.readBuffer(bufCh, stopReadBufCh)
-				go p.handleSignals(exitCh, winSizeCh, stopHandleSignalCh)
-			} else {
-				p.completion.Update(*p.buf.Document())
-				p.renderer.Render(p.buf, p.prevText, p.completion)
-			}
-		case w := <-winSizeCh:
-			p.renderer.UpdateWinSize(w)
-			p.renderer.Render(p.buf, p.prevText, p.completion)
-		case code := <-exitCh:
-			p.renderer.BreakLine(p.buf)
-			p.tearDown()
-			os.Exit(code)
-		default:
-			time.Sleep(10 * time.Millisecond)
-		}
-	}
+	p.RunCtx(context.Background())
 }
 
-// Run starts prompt.
+// RunCtx starts prompt accepting a context, which is checked for cancellation
 func (p *Prompt) RunCtx(ctx context.Context) {
 	p.skipTearDown = false
 	defer debug.Teardown()
@@ -145,10 +80,8 @@ func (p *Prompt) RunCtx(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			//p.renderer.BreakLine(p.buf)
 			stopReadBufCh <- struct{}{}
 			stopHandleSignalCh <- struct{}{}
-
 			return
 		case b := <-bufCh:
 			if shouldExit, e := p.feed(b); shouldExit {
@@ -253,6 +186,8 @@ func (p *Prompt) feed(b []byte) (shouldExit bool, exec *Exec) {
 		}
 	case ControlD:
 		if p.buf.Text() == "" {
+			// if there is an explicit binding for ctrl+d, execute it first
+			p.handleKeyBinding(key)
 			shouldExit = true
 			return
 		}
