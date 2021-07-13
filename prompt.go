@@ -2,6 +2,7 @@ package prompt
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"time"
 
@@ -50,6 +51,11 @@ func (p *Prompt) ClearScreen() {
 
 // Run starts prompt.
 func (p *Prompt) Run() {
+	p.RunCtx(context.Background())
+}
+
+// RunCtx starts prompt accepting a context, which is checked for cancellation
+func (p *Prompt) RunCtx(ctx context.Context) {
 	p.skipTearDown = false
 	defer debug.Teardown()
 	debug.Log("start prompt")
@@ -73,6 +79,10 @@ func (p *Prompt) Run() {
 
 	for {
 		select {
+		case <-ctx.Done():
+			stopReadBufCh <- struct{}{}
+			stopHandleSignalCh <- struct{}{}
+			return
 		case b := <-bufCh:
 			if shouldExit, e := p.feed(b); shouldExit {
 				p.renderer.BreakLine(p.buf)
@@ -176,6 +186,8 @@ func (p *Prompt) feed(b []byte) (shouldExit bool, exec *Exec) {
 		}
 	case ControlD:
 		if p.buf.Text() == "" {
+			// if there is an explicit binding for ctrl+d, execute it first
+			p.handleKeyBinding(key)
 			shouldExit = true
 			return
 		}
