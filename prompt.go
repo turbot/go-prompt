@@ -3,6 +3,7 @@ package prompt
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"time"
 
@@ -98,6 +99,10 @@ func (p *Prompt) RunCtx(ctx context.Context) {
 				// Reset to Blocking mode because returned EAGAIN when still set non-blocking mode.
 				debug.AssertNoError(p.in.TearDown())
 				p.executor(e.input)
+				// check whether context is cancelled
+				if errors.Is(ctx.Err(), context.Canceled) {
+					return
+				}
 
 				p.completion.Update(*p.buf.Document())
 
