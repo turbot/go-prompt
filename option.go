@@ -54,7 +54,7 @@ func OptionCompletionWordSeparator(x string) Option {
 }
 
 // OptionHighlighter for syntax highlighting
-func OptionHighlighter(f func(Document) string) Option {
+func OptionHighlighter(f func(Document) ([]byte, error)) Option {
 	return func(p *Prompt) error {
 		p.renderer.highlighter = f
 		return nil

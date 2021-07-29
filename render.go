@@ -15,7 +15,7 @@ type Render struct {
 	prefix             string
 	livePrefixCallback func() (prefix string, useLivePrefix bool)
 	breakLineCallback  func(*Document)
-	highlighter        func(Document) string
+	highlighter        func(Document) ([]byte, error)
 	title              string
 	row                uint16
 	col                uint16
@@ -188,10 +188,6 @@ func (r *Render) Render(buffer *Buffer, previousText string, completion *Complet
 	defer func() { debug.AssertNoError(r.out.Flush()) }()
 
 	line := buffer.Text()
-	if r.highlighter != nil {
-		line = r.highlighter(*buffer.cacheDocument)
-	}
-
 	prefix := r.getCurrentPrefix()
 	cursor := utf8.RuneCountInString(prefix) + utf8.RuneCountInString(line)
 
@@ -214,9 +210,19 @@ func (r *Render) Render(buffer *Buffer, previousText string, completion *Complet
 	r.out.EraseDown()
 
 	r.renderPrefix()
-	r.out.SetColor(r.inputTextColor, r.inputBGColor, false)
-	r.out.WriteStr(line)
-	r.out.SetColor(DefaultColor, DefaultColor, false)
+	if r.highlighter == nil {
+		r.out.SetColor(r.inputTextColor, r.inputBGColor, false)
+		r.out.WriteStr(line)
+		r.out.SetColor(DefaultColor, DefaultColor, false)
+	} else if bytes, err := r.highlighter(*buffer.Document()); err == nil {
+		// the highlighter gives back all control characters
+		r.out.WriteRaw(bytes)
+	} else {
+		debug.Log(fmt.Sprintf("Highlighter error: %v", err))
+		r.out.SetColor(r.inputTextColor, r.inputBGColor, false)
+		r.out.WriteStr(line)
+		r.out.SetColor(DefaultColor, DefaultColor, false)
+	}
 	r.lineWrap(cursor)
 
 	r.out.EraseDown()
