@@ -15,6 +15,7 @@ type Render struct {
 	prefix             string
 	livePrefixCallback func() (prefix string, useLivePrefix bool)
 	breakLineCallback  func(*Document)
+	highlighter        func(Document) string
 	title              string
 	row                uint16
 	col                uint16
@@ -187,6 +188,10 @@ func (r *Render) Render(buffer *Buffer, previousText string, completion *Complet
 	defer func() { debug.AssertNoError(r.out.Flush()) }()
 
 	line := buffer.Text()
+	if r.highlighter != nil {
+		line = r.highlighter(*buffer.cacheDocument)
+	}
+
 	prefix := r.getCurrentPrefix()
 	cursor := utf8.RuneCountInString(prefix) + utf8.RuneCountInString(line)
 
