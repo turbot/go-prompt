@@ -15,7 +15,7 @@ type Render struct {
 	prefix             string
 	livePrefixCallback func() (prefix string, useLivePrefix bool)
 	breakLineCallback  func(*Document)
-	highlighter        func(Document) ([]byte, error)
+	formatter          func(Document) ([]byte, error)
 	title              string
 	row                uint16
 	col                uint16
@@ -210,18 +210,23 @@ func (r *Render) Render(buffer *Buffer, previousText string, completion *Complet
 	r.out.EraseDown()
 
 	r.renderPrefix()
-	if r.highlighter == nil {
+
+	var formatted []byte
+	if r.formatter != nil {
+		if formattedBytes, err := r.formatter(*buffer.Document()); err == nil {
+			// the formatter gives back a fully formatted text
+			// with all control characters
+			formatted = formattedBytes
+		}
+	}
+
+	if len(formatted) == 0 {
 		r.out.SetColor(r.inputTextColor, r.inputBGColor, false)
 		r.out.WriteStr(line)
 		r.out.SetColor(DefaultColor, DefaultColor, false)
-	} else if bytes, err := r.highlighter(*buffer.Document()); err == nil {
-		// the highlighter gives back all control characters
-		r.out.WriteRaw(bytes)
 	} else {
-		debug.Log(fmt.Sprintf("Highlighter error: %v", err))
-		r.out.SetColor(r.inputTextColor, r.inputBGColor, false)
-		r.out.WriteStr(line)
-		r.out.SetColor(DefaultColor, DefaultColor, false)
+		// the formatted text contains all necessary control characters
+		r.out.WriteRaw(formatted)
 	}
 	r.lineWrap(cursor)
 

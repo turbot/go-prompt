@@ -53,10 +53,10 @@ func OptionCompletionWordSeparator(x string) Option {
 	}
 }
 
-// OptionHighlighter for syntax highlighting
-func OptionHighlighter(f func(Document) ([]byte, error)) Option {
+// OptionFormatter for syntax highlighting
+func OptionFormatter(f func(Document) ([]byte, error)) Option {
 	return func(p *Prompt) error {
-		p.renderer.highlighter = f
+		p.renderer.formatter = f
 		return nil
 	}
 }
