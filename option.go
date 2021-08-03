@@ -53,6 +53,14 @@ func OptionCompletionWordSeparator(x string) Option {
 	}
 }
 
+// OptionFormatter for syntax highlighting
+func OptionFormatter(f func(Document) ([]byte, error)) Option {
+	return func(p *Prompt) error {
+		p.renderer.formatter = f
+		return nil
+	}
+}
+
 // OptionLivePrefix to change the prefix dynamically by callback function
 func OptionLivePrefix(f func() (prefix string, useLivePrefix bool)) Option {
 	return func(p *Prompt) error {
