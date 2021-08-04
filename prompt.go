@@ -50,6 +50,10 @@ func (p *Prompt) ClearScreen() {
 	p.renderer.ClearScreen()
 }
 
+func (p *Prompt) Render() {
+	p.renderer.Render(p.buf, p.prevText, p.completion)
+}
+
 // Run starts prompt.
 func (p *Prompt) Run() {
 	p.RunCtx(context.Background())
