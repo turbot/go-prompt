@@ -260,9 +260,26 @@ func (r *Render) BreakLine(buffer *Buffer) {
 	cursor := utf8.RuneCountInString(buffer.Document().TextBeforeCursor()) + utf8.RuneCountInString(r.getCurrentPrefix())
 	r.clear(cursor, buffer.Document().TextBeforeCursor())
 	r.renderPrefix()
-	r.out.SetColor(r.inputTextColor, r.inputBGColor, false)
-	r.out.WriteStr(buffer.Document().Text + "\n")
-	r.out.SetColor(DefaultColor, DefaultColor, false)
+
+	var formatted []byte
+	if r.formatter != nil {
+		if formattedBytes, err := r.formatter(*buffer.Document()); err == nil {
+			// the formatter gives back a fully formatted text
+			// with all control characters
+			formatted = formattedBytes
+		}
+	}
+
+	if len(formatted) == 0 {
+		r.out.SetColor(r.inputTextColor, r.inputBGColor, false)
+		r.out.WriteStr(buffer.Document().Text + "\n")
+		r.out.SetColor(DefaultColor, DefaultColor, false)
+	} else {
+		// the formatted text contains all necessary control characters
+		r.out.WriteRaw(formatted)
+		r.out.WriteRawStr("\n")
+	}
+
 	debug.AssertNoError(r.out.Flush())
 	if r.breakLineCallback != nil {
 		r.breakLineCallback(buffer.Document())
