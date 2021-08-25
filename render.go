@@ -195,9 +195,7 @@ func (r *Render) Render(buffer *Buffer, previousText string, completion *Complet
 
 	// prepare area
 	_, y := r.toPos(cursor, line)
-
-	h := y + 1 + int(completion.max)
-	if h > int(r.row) || completionMargin > int(r.col) {
+	if completionMargin > int(r.col) {
 		r.renderWindowTooSmall()
 		return
 	}
@@ -234,21 +232,28 @@ func (r *Render) Render(buffer *Buffer, previousText string, completion *Complet
 
 	cursor = r.backward(cursor, utf8.RuneCountInString(line)-buffer.DisplayCursorPosition(), buffer.Text())
 
-	r.renderCompletion(buffer, completion)
-	if suggest, ok := completion.GetSelectedSuggestion(); ok {
-		cursor = r.backward(cursor, utf8.RuneCountInString(buffer.Document().GetWordBeforeCursorUntilSeparator(completion.wordSeparator)), buffer.Text())
+	nSuggestions := len(completion.GetSuggestions())
+	if nSuggestions > int(completion.max) {
+		nSuggestions = int(completion.max)
+	}
+	requiredHeightForSuggestions := y + 1 + nSuggestions
+	if requiredHeightForSuggestions <= int(r.row) {
+		r.renderCompletion(buffer, completion)
+		if suggest, ok := completion.GetSelectedSuggestion(); ok {
+			cursor = r.backward(cursor, utf8.RuneCountInString(buffer.Document().GetWordBeforeCursorUntilSeparator(completion.wordSeparator)), buffer.Text())
 
-		r.out.SetColor(r.previewSuggestionTextColor, r.previewSuggestionBGColor, false)
-		r.out.WriteStr(suggest.Text)
-		r.out.SetColor(DefaultColor, DefaultColor, false)
-		cursor += utf8.RuneCountInString(suggest.Text)
+			r.out.SetColor(r.previewSuggestionTextColor, r.previewSuggestionBGColor, false)
+			r.out.WriteStr(suggest.Text)
+			r.out.SetColor(DefaultColor, DefaultColor, false)
+			cursor += utf8.RuneCountInString(suggest.Text)
 
-		rest := buffer.Document().TextAfterCursor()
-		r.out.WriteStr(rest)
-		cursor += utf8.RuneCountInString(rest)
-		r.lineWrap(cursor)
+			rest := buffer.Document().TextAfterCursor()
+			r.out.WriteStr(rest)
+			cursor += utf8.RuneCountInString(rest)
+			r.lineWrap(cursor)
 
-		cursor = r.backward(cursor, utf8.RuneCountInString(rest), rest)
+			cursor = r.backward(cursor, utf8.RuneCountInString(rest), rest)
+		}
 	}
 	r.previousCursor = cursor
 }
