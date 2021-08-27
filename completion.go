@@ -29,10 +29,11 @@ type Suggest struct {
 
 // CompletionManager manages which suggestion is now selected.
 type CompletionManager struct {
-	selected  int // -1 means nothing one is selected.
-	tmp       []Suggest
-	max       uint16
-	completer Completer
+	selected     int // -1 means nothing one is selected.
+	tmp          []Suggest
+	max          uint16
+	viewportRows int
+	completer    Completer
 
 	verticalScroll int
 	wordSeparator  string
@@ -79,7 +80,7 @@ func (c *CompletionManager) Previous() {
 
 // Next to select the next suggestion item.
 func (c *CompletionManager) Next() {
-	if c.verticalScroll+int(c.max)-1 == c.selected {
+	if c.verticalScroll+int(c.viewportRows)-1 == c.selected {
 		c.verticalScroll++
 	}
 	c.selected++
@@ -93,6 +94,9 @@ func (c *CompletionManager) Completing() bool {
 
 func (c *CompletionManager) update() {
 	max := int(c.max)
+	if c.viewportRows < max {
+		max = c.viewportRows
+	}
 	if len(c.tmp) < max {
 		max = len(c.tmp)
 	}
