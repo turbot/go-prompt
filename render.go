@@ -93,7 +93,7 @@ func (r *Render) renderWindowTooSmall() {
 	r.out.WriteStr("Your console window is too small...")
 }
 
-func (r *Render) renderCompletion(buf *Buffer, completions *CompletionManager) {
+func (r *Render) renderCompletion(buf *Buffer, completions *CompletionManager, availableRows int) {
 	defer debug.Un(debug.Trace("renderCompletion"))
 	suggestions := completions.GetSuggestions()
 	if len(completions.GetSuggestions()) == 0 {
@@ -107,27 +107,41 @@ func (r *Render) renderCompletion(buf *Buffer, completions *CompletionManager) {
 	// +1 means a width of scrollbar.
 	width++
 
-	windowHeight := len(formatted)
-	if windowHeight > int(completions.max) {
-		windowHeight = int(completions.max)
+	requiredRows := len(formatted)
+
+	if availableRows < 3 && requiredRows > 3 {
+		debug.Log("Not enough height to render suggestions")
+		return
 	}
-	formatted = formatted[completions.verticalScroll : completions.verticalScroll+windowHeight]
-	r.prepareArea(windowHeight)
+
+	viewportRows := requiredRows
+	if viewportRows > int(completions.max) {
+		debug.Log("windowHeight > int(completions.max)")
+		viewportRows = int(completions.max)
+	}
+	if viewportRows > availableRows {
+		debug.Log("windowHeight > availableRows")
+		viewportRows = availableRows
+	}
+
+	completions.viewportRows = viewportRows
+
+	formatted = formatted[completions.verticalScroll : completions.verticalScroll+viewportRows]
+	r.prepareArea(viewportRows)
 
 	cursor := utf8.RuneCountInString(prefix) + utf8.RuneCountInString(buf.Document().TextBeforeCursor())
 	x, _ := r.toPos(cursor, buf.Text())
 	if x+width >= int(r.col) {
-		debug.Log(fmt.Sprintln("x+width", x+width))
 		cursor = r.backward(cursor, x+width-int(r.col), buf.Text())
 	}
 
 	contentHeight := len(completions.tmp)
 
-	fractionVisible := float64(windowHeight) / float64(contentHeight)
+	fractionVisible := float64(viewportRows) / float64(contentHeight)
 	fractionAbove := float64(completions.verticalScroll) / float64(contentHeight)
 
-	scrollbarHeight := int(clamp(float64(windowHeight), 1, float64(windowHeight)*fractionVisible))
-	scrollbarTop := int(float64(windowHeight) * fractionAbove)
+	scrollbarHeight := int(clamp(float64(viewportRows), 1, float64(viewportRows)*fractionVisible))
+	scrollbarTop := int(float64(viewportRows) * fractionAbove)
 
 	isScrollThumb := func(row int) bool {
 		return scrollbarTop <= row && row <= scrollbarTop+scrollbarHeight
@@ -135,7 +149,7 @@ func (r *Render) renderCompletion(buf *Buffer, completions *CompletionManager) {
 
 	selected := completions.selected - completions.verticalScroll
 	r.out.SetColor(White, Cyan, false)
-	for i := 0; i < windowHeight; i++ {
+	for i := 0; i < viewportRows; i++ {
 		r.out.CursorDown(1)
 		if i == selected {
 			r.out.SetColor(r.selectedSuggestionTextColor, r.selectedSuggestionBGColor, true)
@@ -167,7 +181,7 @@ func (r *Render) renderCompletion(buf *Buffer, completions *CompletionManager) {
 		r.out.CursorForward(x + width - int(r.col))
 	}
 
-	r.out.CursorUp(windowHeight)
+	r.out.CursorUp(viewportRows)
 	r.out.SetColor(DefaultColor, DefaultColor, false)
 }
 
@@ -194,7 +208,7 @@ func (r *Render) Render(buffer *Buffer, previousText string, completion *Complet
 	r.move(r.previousCursor, 0, previousText)
 
 	// prepare area
-	_, y := r.toPos(cursor, line)
+	r.toPos(cursor, line)
 	if completionMargin > int(r.col) {
 		r.renderWindowTooSmall()
 		return
@@ -232,28 +246,21 @@ func (r *Render) Render(buffer *Buffer, previousText string, completion *Complet
 
 	cursor = r.backward(cursor, utf8.RuneCountInString(line)-buffer.DisplayCursorPosition(), buffer.Text())
 
-	nSuggestions := len(completion.GetSuggestions())
-	if nSuggestions > int(completion.max) {
-		nSuggestions = int(completion.max)
-	}
-	requiredHeightForSuggestions := y + 1 + nSuggestions
-	if requiredHeightForSuggestions <= int(r.row) {
-		r.renderCompletion(buffer, completion)
-		if suggest, ok := completion.GetSelectedSuggestion(); ok {
-			cursor = r.backward(cursor, utf8.RuneCountInString(buffer.Document().GetWordBeforeCursorUntilSeparator(completion.wordSeparator)), buffer.Text())
+	r.renderCompletion(buffer, completion, int(r.row)-4)
+	if suggest, ok := completion.GetSelectedSuggestion(); ok {
+		cursor = r.backward(cursor, utf8.RuneCountInString(buffer.Document().GetWordBeforeCursorUntilSeparator(completion.wordSeparator)), buffer.Text())
 
-			r.out.SetColor(r.previewSuggestionTextColor, r.previewSuggestionBGColor, false)
-			r.out.WriteStr(suggest.Text)
-			r.out.SetColor(DefaultColor, DefaultColor, false)
-			cursor += utf8.RuneCountInString(suggest.Text)
+		r.out.SetColor(r.previewSuggestionTextColor, r.previewSuggestionBGColor, false)
+		r.out.WriteStr(suggest.Text)
+		r.out.SetColor(DefaultColor, DefaultColor, false)
+		cursor += utf8.RuneCountInString(suggest.Text)
 
-			rest := buffer.Document().TextAfterCursor()
-			r.out.WriteStr(rest)
-			cursor += utf8.RuneCountInString(rest)
-			r.lineWrap(cursor)
+		rest := buffer.Document().TextAfterCursor()
+		r.out.WriteStr(rest)
+		cursor += utf8.RuneCountInString(rest)
+		r.lineWrap(cursor)
 
-			cursor = r.backward(cursor, utf8.RuneCountInString(rest), rest)
-		}
+		cursor = r.backward(cursor, utf8.RuneCountInString(rest), rest)
 	}
 	r.previousCursor = cursor
 }
