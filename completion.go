@@ -23,8 +23,11 @@ var (
 
 // Suggest is printed when completing.
 type Suggest struct {
+	// Displayed in the autocomplete suggestions dropdown
 	Text        string
 	Description string
+	// This is used to fill in when a Suggestion is selected
+	Output string
 }
 
 // CompletionManager manages which suggestion is now selected.
