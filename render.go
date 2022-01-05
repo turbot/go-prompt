@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"runtime"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"github.com/c-bata/go-prompt/internal/debug"
@@ -14,15 +15,19 @@ type Render struct {
 	out                ConsoleWriter
 	prefix             string
 	livePrefixCallback func() (prefix string, useLivePrefix bool)
+	status             *string
 	breakLineCallback  func(*Document)
 	formatter          func(Document) ([]byte, error)
 	title              string
 	row                uint16
 	col                uint16
 
-	previousCursor int
+	previousCursor     int
+	lastStatusRendered *string
 
 	// colors,
+	statusTextColor              Color
+	statusBGColor                Color
 	prefixTextColor              Color
 	prefixBGColor                Color
 	inputTextColor               Color
@@ -39,6 +44,8 @@ type Render struct {
 	selectedDescriptionBGColor   Color
 	scrollbarThumbColor          Color
 	scrollbarBGColor             Color
+
+	renderLock *sync.Mutex
 }
 
 // Setup to initialize console output.
@@ -56,6 +63,15 @@ func (r *Render) getCurrentPrefix() string {
 		return prefix
 	}
 	return r.prefix
+}
+
+func (r *Render) renderStatus() {
+	r.out.SetColor(r.statusTextColor, r.statusBGColor, false)
+	if r.status != nil {
+		r.out.WriteStr(fmt.Sprintf("%s\n", *r.status))
+	}
+	r.out.SetColor(DefaultColor, DefaultColor, false)
+	r.lastStatusRendered = r.status
 }
 
 func (r *Render) renderPrefix() {
@@ -194,6 +210,13 @@ func (r *Render) ClearScreen() {
 // Render renders to the console.
 func (r *Render) Render(buffer *Buffer, previousText string, completion *CompletionManager) {
 	defer debug.Un(debug.Trace("Render"))
+
+	// to make sure that renders triggers from different sources
+	// (kbd event, prompt.Render, prompt.SetStatus)
+	// do not race with each other
+	r.renderLock.Lock()
+	defer r.renderLock.Unlock()
+
 	// In situations where a pseudo tty is allocated (e.g. within a docker container),
 	// window size via TIOCGWINSZ is not immediately available and will result in 0,0 dimensions.
 	if r.col == 0 {
@@ -221,6 +244,10 @@ func (r *Render) Render(buffer *Buffer, previousText string, completion *Complet
 	r.out.EraseLine()
 	r.out.EraseDown()
 
+	if r.lastStatusRendered != nil {
+		r.out.CursorUp(1)
+	}
+	r.renderStatus()
 	r.renderPrefix()
 
 	var formatted []byte

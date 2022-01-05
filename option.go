@@ -1,5 +1,7 @@
 package prompt
 
+import "sync"
+
 // Option is the type to replace default parameters.
 // prompt.New accepts any number of options (this is functional option pattern).
 type Option func(prompt *Prompt) error
@@ -57,6 +59,22 @@ func OptionCompletionWordSeparator(x string) Option {
 func OptionFormatter(f func(Document) ([]byte, error)) Option {
 	return func(p *Prompt) error {
 		p.renderer.formatter = f
+		return nil
+	}
+}
+
+// OptionStatusTextColor change a text color of prefix string
+func OptionStatusTextColor(x Color) Option {
+	return func(p *Prompt) error {
+		p.renderer.statusTextColor = x
+		return nil
+	}
+}
+
+// OptionStatusBackgroundColor to change a background color of prefix string
+func OptionStatusBackgroundColor(x Color) Option {
+	return func(p *Prompt) error {
+		p.renderer.statusBGColor = x
 		return nil
 	}
 }
@@ -282,9 +300,12 @@ func New(executor Executor, completer Completer, opts ...Option) *Prompt {
 	pt := &Prompt{
 		in: NewStandardInputParser(),
 		renderer: &Render{
+			renderLock:                   &sync.Mutex{},
 			prefix:                       "> ",
 			out:                          defaultWriter,
 			livePrefixCallback:           func() (string, bool) { return "", false },
+			statusTextColor:              DefaultColor,
+			statusBGColor:                DefaultColor,
 			prefixTextColor:              Blue,
 			prefixBGColor:                DefaultColor,
 			inputTextColor:               DefaultColor,

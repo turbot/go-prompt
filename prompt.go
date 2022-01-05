@@ -50,6 +50,18 @@ func (p *Prompt) ClearScreen() {
 	p.renderer.ClearScreen()
 }
 
+// SetStatus :: Sets the status line
+func (p *Prompt) SetStatus(status string) {
+	p.renderer.status = &status
+	p.Render()
+}
+
+// ClearStatus :: clears the status line
+func (p *Prompt) ClearStatus() {
+	p.renderer.status = nil
+	p.Render()
+}
+
 func (p *Prompt) Render() {
 	p.renderer.Render(p.buf, p.prevText, p.completion)
 }
