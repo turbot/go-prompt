@@ -50,6 +50,10 @@ func (p *Prompt) ClearScreen() {
 	p.renderer.ClearScreen()
 }
 
+func (p *Prompt) ClearLine() {
+	p.renderer.Render(NewBuffer(), p.buf.Text(), p.completion)
+}
+
 func (p *Prompt) Render() {
 	p.renderer.Render(p.buf, p.prevText, p.completion)
 }
