@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"time"
 
 	"github.com/c-bata/go-prompt/internal/debug"
+	"github.com/turbot/go-kit/helpers"
 )
 
 // Executor is called when user input something text.
@@ -142,6 +144,7 @@ func (p *Prompt) RunCtx(ctx context.Context) {
 }
 
 func (p *Prompt) feed(b []byte) (shouldExit bool, exec *Exec) {
+	debug.Log(fmt.Sprintln("*** Input Feed:", b))
 	key := GetKey(b)
 	p.prevText = p.buf.Text()
 
@@ -208,7 +211,8 @@ func (p *Prompt) feed(b []byte) (shouldExit bool, exec *Exec) {
 		if p.handleASCIICodeBinding(b) {
 			return
 		}
-		p.buf.InsertText(string(b), false, true)
+		s := helpers.Clean(string(b))
+		p.buf.InsertText(s, false, true)
 	}
 
 	shouldExit = p.handleKeyBinding(key)
