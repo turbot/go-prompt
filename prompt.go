@@ -209,6 +209,9 @@ func (p *Prompt) feed(b []byte) (shouldExit bool, exec *Exec) {
 		if p.handleASCIICodeBinding(b) {
 			return
 		}
+		// let's clean this up before we put the text in the buffer
+		// this ensures that no invisible or control characters are
+		// ending up the text buffer.
 		s := helpers.Clean(string(b))
 		p.buf.InsertText(s, false, true)
 	}
