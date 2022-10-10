@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"time"
 
@@ -144,7 +143,6 @@ func (p *Prompt) RunCtx(ctx context.Context) {
 }
 
 func (p *Prompt) feed(b []byte) (shouldExit bool, exec *Exec) {
-	debug.Log(fmt.Sprintln("*** Input Feed:", b))
 	key := GetKey(b)
 	p.prevText = p.buf.Text()
 
