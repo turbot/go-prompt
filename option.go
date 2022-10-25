@@ -45,6 +45,15 @@ func OptionInitialBufferText(x string) Option {
 	}
 }
 
+// OptionBufferPresetHook to set a preset hook for the buffer text
+// the string returned by the PresetHook function is the one which goes into the buffer
+func OptionBufferPresetHook(f BufferPresetHook) Option {
+	return func(p *Prompt) error {
+		p.buf.preSetHook = f
+		return nil
+	}
+}
+
 // OptionCompletionWordSeparator to set word separators. Enable only ' ' if empty.
 func OptionCompletionWordSeparator(x string) Option {
 	return func(p *Prompt) error {

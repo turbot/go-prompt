@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/c-bata/go-prompt/internal/debug"
-	"github.com/turbot/go-kit/helpers"
 )
 
 // Executor is called when user input something text.
@@ -209,11 +208,7 @@ func (p *Prompt) feed(b []byte) (shouldExit bool, exec *Exec) {
 		if p.handleASCIICodeBinding(b) {
 			return
 		}
-		// let's clean this up before we put the text in the buffer
-		// this ensures that no invisible or control characters are
-		// ending up the text buffer.
-		s := helpers.Clean(string(b))
-		p.buf.InsertText(s, false, true)
+		p.buf.InsertText(string(b), false, true)
 	}
 
 	shouldExit = p.handleKeyBinding(key)

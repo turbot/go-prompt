@@ -6,6 +6,8 @@ import (
 	"github.com/c-bata/go-prompt/internal/debug"
 )
 
+type BufferPresetHook func(string) string
+
 // Buffer emulates the console buffer.
 type Buffer struct {
 	workingLines    []string // The working lines. Similar to history
@@ -14,6 +16,7 @@ type Buffer struct {
 	cacheDocument   *Document
 	preferredColumn int // Remember the original column for the next up/down movement.
 	lastKeyStroke   Key
+	preSetHook      BufferPresetHook
 }
 
 // Text returns string of the current line.
@@ -50,6 +53,10 @@ func (b *Buffer) DisplayCursorPosition() int {
 func (b *Buffer) InsertText(v string, overwrite bool, moveCursor bool) {
 	or := []rune(b.Text())
 	oc := b.cursorPosition
+
+	if b.preSetHook != nil {
+		v = b.preSetHook(v)
+	}
 
 	if overwrite {
 		overwritten := string(or[oc : oc+len(v)])
