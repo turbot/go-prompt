@@ -6,7 +6,11 @@ import (
 	"github.com/c-bata/go-prompt/internal/debug"
 )
 
-type BufferPresetHook func(string) string
+// BufferPreHook is called right before an input is set in the Buffer.
+// It receives the user input as a string and returns (modified input, ignore)
+// It MUST return the `modifiedInput` string
+// If `ignore` is set to `true`, then it
+type BufferPreHook func(input string) (modifiedInput string, ignore bool)
 
 // Buffer emulates the console buffer.
 type Buffer struct {
@@ -16,7 +20,7 @@ type Buffer struct {
 	cacheDocument   *Document
 	preferredColumn int // Remember the original column for the next up/down movement.
 	lastKeyStroke   Key
-	preSetHook      BufferPresetHook
+	preHook         BufferPreHook
 }
 
 // Text returns string of the current line.
@@ -54,8 +58,12 @@ func (b *Buffer) InsertText(v string, overwrite bool, moveCursor bool) {
 	or := []rune(b.Text())
 	oc := b.cursorPosition
 
-	if b.preSetHook != nil {
-		v = b.preSetHook(v)
+	if b.preHook != nil {
+		updated, ignore := b.preHook(v)
+		if ignore {
+			return
+		}
+		v = updated
 	}
 
 	if overwrite {

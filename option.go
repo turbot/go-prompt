@@ -45,11 +45,10 @@ func OptionInitialBufferText(x string) Option {
 	}
 }
 
-// OptionBufferPresetHook to set a preset hook for the buffer text
-// the string returned by the PresetHook function is the one which goes into the buffer
-func OptionBufferPresetHook(f BufferPresetHook) Option {
+// OptionBufferPreHook to set a prehook which gets called before adding to the buffer
+func OptionBufferPreHook(f BufferPreHook) Option {
 	return func(p *Prompt) error {
-		p.buf.preSetHook = f
+		p.buf.preHook = f
 		return nil
 	}
 }
