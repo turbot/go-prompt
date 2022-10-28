@@ -45,6 +45,14 @@ func OptionInitialBufferText(x string) Option {
 	}
 }
 
+// OptionBufferPreHook to set a prehook which gets called before adding to the buffer
+func OptionBufferPreHook(f BufferPreHook) Option {
+	return func(p *Prompt) error {
+		p.buf.preHook = f
+		return nil
+	}
+}
+
 // OptionCompletionWordSeparator to set word separators. Enable only ' ' if empty.
 func OptionCompletionWordSeparator(x string) Option {
 	return func(p *Prompt) error {
