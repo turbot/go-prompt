@@ -55,7 +55,7 @@ func (p *Prompt) ClearLine() {
 }
 
 func (p *Prompt) Render() {
-	p.renderer.Render(p.buf, p.prevText, p.completion)
+	p.renderer.Render(p.buf, p.buf.Text(), p.completion)
 }
 
 // Run starts prompt.
