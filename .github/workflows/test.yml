@@ -4,6 +4,9 @@ on:
     branches:
     - master
 
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Run tests
@@ -13,12 +16,12 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
     - name: Set up Go 1.14
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@bfdd3570ce990073878bf10f6b2d79082de49492 # v2
       with:
         go-version: 1.14
       id: go
     - name: Check out code into the Go module directory
-      uses: actions/checkout@master
+      uses: actions/checkout@61b9e3751b92087fd0b06925ba6dd6314e06f089 # master
     - name: Running go tests
       env:
         GO111MODULE: on
@@ -29,12 +32,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go 1.14
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@bfdd3570ce990073878bf10f6b2d79082de49492 # v2
         with:
           go-version: 1.14
         id: go
       - name: Check out code into the Go module directory
-        uses: actions/checkout@master
+        uses: actions/checkout@61b9e3751b92087fd0b06925ba6dd6314e06f089 # master
       - name: Building go examples
         env:
           GO111MODULE: on
@@ -45,12 +48,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go 1.14
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@bfdd3570ce990073878bf10f6b2d79082de49492 # v2
         with:
           go-version: 1.14
         id: go
       - name: Check out code into the Go module directory
-        uses: actions/checkout@master
+        uses: actions/checkout@61b9e3751b92087fd0b06925ba6dd6314e06f089 # master
       - name: Download golangci-lint
         run: |
           wget https://github.com/golangci/golangci-lint/releases/download/v1.31.0/golangci-lint-1.31.0-linux-amd64.tar.gz
